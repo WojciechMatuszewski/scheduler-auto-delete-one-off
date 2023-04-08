@@ -34,6 +34,10 @@ Instead of using SFN and the `Wait` task, we can use a CRON expression to delete
 
 This solution will be **cheaper than the one with SFN, but it suffers from the same problem** – since you have no way of knowing which schedules targets were invoked successfully, you might end up deleting a schedule for a target that has not been invoked yet.
 
+### Bottom line
+
+[On reddit, AWS (?) recommends **using a target invocation as a signal that the schedule can be deleted**](https://www.reddit.com/r/aws/comments/yxqna2/comment/ixr51en/?utm_source=share&utm_medium=web2x&context=3). This has big implications – you need to somehow "carry" the schedule name into the target payload.
+
 ## Learnings
 
 - If you do not specify the _schedule group_, the group name will be "default".
