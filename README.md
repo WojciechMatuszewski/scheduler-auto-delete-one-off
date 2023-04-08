@@ -4,15 +4,41 @@
 
 - Inspired by [this article](https://theburningmonk.com/2023/02/the-biggest-problem-with-eventbridge-scheduler-and-how-to-fix-it/)
 
-## The architecture
+## The approaches
 
-WIP
+### The approach listed in the articles from above
+
+This one suffers from the fact that it only works with a Lambda function target. The main benefit is that it is very accurate – we will only delete the schedule when the scheduler actually invokes your target.
+
+Keep in mind that there might be some errors between the scheduler and the target. If that is the case, [the scheduler will retry the invocation up to 185 times](https://docs.aws.amazon.com/scheduler/latest/UserGuide/getting-started.html).
+
+### The approach with SFN and the `Wait` task
+
+If you want to use other invocation targets than the AWS Lambda function, you will not have a way to know if the schedule was invoked or not (at least not directly). To my best knowledge, there is **no API to retrieve the "success" status of a given schedule**.
+
+The plan here is to create the schedule via the SFN and then enter a wait state until the schedule is due. This of course has a limitation of `Wait` state maximum duration, which is one year.
+
+When the schedule is due, you have to give the scheduler some time to invoke your target. **If you delete the schedule at this very moment, your target might not be invoked**! In the code, I've added an artificial delay of 90 seconds. This is a magic number, and feels bad to me.
+
+Keep in mind that **this approach does not account for scheduler retries**. If the initial invocation did not succeed, and the delay time is up, the schedule will be deleted. This means that **no matter what you do, in theory, you run the risk of your target not executing**.
+
+To be perfectly honest, I have no idea how to make this approach more robust. The ideal way would be to have some sort of event when the scheduler invokes the target. Sadly, at the time of writing this, such functionality does not exist.
+
+### The approach with the EventBridge CRON and schedule groups
+
+Instead of deleting a single schedule, [one can delete the whole group of schedules](https://docs.aws.amazon.com/scheduler/latest/APIReference/API_DeleteScheduleGroup.html).
+
+> There **does not appear to be a limit to the number of schedules in a given group, but there is a limit of 500 schedule groups**. I would say that is plenty. Keep in mind that there is a limit of schedules that applies to your whole AWS account.
+
+Instead of using SFN and the `Wait` task, we can use a CRON expression to delete the whole group after some period of time. This means you will need to _shard_ the schedules into different groups (I would recommend daily).
+
+This solution will be **cheaper than the one with SFN, but it suffers from the same problem** – since you have no way of knowing which schedules targets were invoked successfully, you might end up deleting a schedule for a target that has not been invoked yet.
 
 ## Learnings
 
 - If you do not specify the _schedule group_, the group name will be "default".
 
-  - TODO: Check how the deletion of the whole group works.
+  - You can delete a group of schedules. There does not appear to be a limit on the number of schedules per group (?).
 
 - The scheduler allows you to create schedules for dates that are in the past.
 

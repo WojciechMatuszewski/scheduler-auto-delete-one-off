@@ -128,6 +128,14 @@ export class EbSchedulerAutoDeleteStack extends cdk.Stack {
       }
     );
 
+    const waitForExecution = new cdk.aws_stepfunctions.Wait(
+      this,
+      "WaitForExecution",
+      {
+        time: cdk.aws_stepfunctions.WaitTime.duration(cdk.Duration.seconds(90))
+      }
+    );
+
     const deleteScheduleTask = new cdk.aws_stepfunctions_tasks.CallAwsService(
       this,
       "DeleteSchedule",
@@ -150,6 +158,12 @@ export class EbSchedulerAutoDeleteStack extends cdk.Stack {
          */
         .next(transformSchedulerTimestamp)
         .next(waitForTimestamp)
+        /**
+         * Hack to ensure the schedule is executed.
+         * If the schedule is not executed (think target invocation errors), the schedule will be deleted either way.
+         * That is not something we want.
+         */
+        .next(waitForExecution)
         .next(deleteScheduleTask),
       role: machineRole
     });
